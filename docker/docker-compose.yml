@@ -1,0 +1,60 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────
+# docker-compose.yml – local development & production stack
+#
+# Start all services:   docker compose up --build
+# API only:             docker compose up api
+# With GPU:             uncomment the 'deploy' block under api
+# ─────────────────────────────────────────────────────────────
+
+services:
+  # ── FastAPI backend ──────────────────────────────────────────
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: medical-ai:latest
+    container_name: medical-ai-api
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount model directory so you can hot-swap .keras files
+      - ../model:/app/model:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TF_CPP_MIN_LOG_LEVEL=2   # suppress TF info logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    # ── GPU support (uncomment if NVIDIA runtime is installed) ──
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # ── Frontend (React dev server) ──────────────────────────────
+  frontend:
+    image: node:20-alpine
+    container_name: medical-ai-frontend
+    working_dir: /app
+    volumes:
+      - ../frontend:/app
+    ports:
+      - "3000:3000"
+    command: sh -c "npm install && npm start"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
