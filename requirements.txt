@@ -9,3 +9,6 @@ scikit-learn
 matplotlib
 python-dotenv
 setuptools
+fastapi
+uvicorn
+pydantic
